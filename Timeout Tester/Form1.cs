@@ -1,11 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Timeout_Tester
@@ -25,11 +18,11 @@ namespace Timeout_Tester
         };
 
         private bool received = false;
+        private MAGLabCL.Timeout timeout_inst = new MAGLabCL.Timeout();
+        private MAGLabCL.ConfirmationThreshold<value_t> ct_inst = new MAGLabCL.ConfirmationThreshold<value_t>(value_t.eUnknown);
         public value_t confirmedValue = value_t.eUnknown;
         private value_t newValue = value_t.eOff;
         private UInt16 secondsCounter = 0;
-        private UInt16 lastReceivedCounter = 0;
-        private UInt16 lastConfirmedCounter = 0;
         private bool timeout = true;
         private UInt16 confirmationCounter = 0;
 
@@ -50,63 +43,22 @@ namespace Timeout_Tester
         {
             secondsCounter++;
             // timeout / received state machine
-            if (received)
-            {
-                lastReceivedCounter = secondsCounter;
-                timeout = false;
-            }
-
-            if (secondsCounter - lastReceivedCounter >= numericUpDownTimeout.Value)
-            {
-                timeout = true;
-            }
-
-            if (secondsCounter - lastReceivedCounter > numericUpDownTimeout.Value)
-            {
-                lastReceivedCounter += 1;
-            }
+            timeout = timeout_inst.update(received, secondsCounter, Convert.ToUInt16(numericUpDownTimeout.Value));
 
             // confirmation state machine
-            if (received)
-            {
-                // received counter processing
-                if (confirmationCounter <= numericUpDownCnfNum.Value)
-                {
-                    confirmationCounter += 1;
-                }
-
-                // new value processing
-                if (newValue != confirmedValue)
-                {
-                    // if both the numeric value and the counter are above the ratio, we have a new value
-                    if (confirmationCounter >= numericUpDownCnfNum.Value)
-                    {
-                        if (secondsCounter - lastConfirmedCounter > numericUpDownCnfTime.Value)
-                        {
-                            confirmedValue = newValue;
-                        }
-                    }
-                }
-
-                // confirmed value processing
-                if (newValue == confirmedValue)
-                {
-                    confirmationCounter = 0;
-                    lastConfirmedCounter = secondsCounter;
-                }
-            }
-
-            if (secondsCounter - lastConfirmedCounter > numericUpDownCnfTime.Value)
-            {
-                lastConfirmedCounter += 1;
-            }
+            confirmedValue = ct_inst.update(
+                received,
+                newValue,
+                secondsCounter,
+                Convert.ToUInt16(numericUpDownCnfTime.Value),
+                Convert.ToUInt16(numericUpDownCnfNum.Value)
+            );
+            
 
             // output code
             if (timeout == true)
             {
-                confirmedValue = value_t.eUnknown;
-                // display value
-                textBoxConfirmedValue.Text = "Unknown";
+                textBoxConfirmedValue.Text = "Timeout";
             }
             else if (confirmationCounter == 0)
             {
@@ -115,17 +67,19 @@ namespace Timeout_Tester
                 {
                     textBoxConfirmedValue.Text = "On";
                 }
-                else
+                else if (confirmedValue == value_t.eOff)
                 {
                     textBoxConfirmedValue.Text = "Off";
                 }
+                else
+                {
+                    textBoxConfirmedValue.Text = "Unknown";
+                }
             }
 
-            textBoxConfirmationTime.Text = (secondsCounter - lastConfirmedCounter).ToString();
-
-            textBoxTimeout.Text = (secondsCounter - lastReceivedCounter).ToString();
-
-            textBoxConfirmationCount.Text = confirmationCounter.ToString();
+            textBoxConfirmationTime.Text = (secondsCounter - ct_inst.lastConfTime).ToString();
+            textBoxTimeout.Text = (secondsCounter - timeout_inst.lastRecTime).ToString();
+            textBoxConfirmationCount.Text = ct_inst.confNumCounter.ToString();
 
             // display counters
             received = false;
