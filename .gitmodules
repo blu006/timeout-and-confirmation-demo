@@ -1,0 +1,3 @@
+[submodule "Timeout Tester/MAGLabCL"]
+	path = Timeout Tester/MAGLabCL
+	url = https://github.com/MAGLaboratory/MAGLabCL.git
